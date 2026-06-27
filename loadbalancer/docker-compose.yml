@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  loadbalancer:
+    build: ./loadbalancer
+    image: loadbalancer_image:latest
+    container_name: loadbalancer
+    ports:
+      - "5000:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true
+    networks:
+      net1:
+        aliases:
+          - loadbalancer
+    environment:
+      N_SERVERS: "3"
+      DOCKER_NETWORK: "net1"
+      SERVER_IMAGE: "server_image:latest"
+      HEARTBEAT_INTERVAL: "5"
+
+networks:
+  net1:
+    driver: bridge
+    name: net1
