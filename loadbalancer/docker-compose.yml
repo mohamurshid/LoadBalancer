@@ -19,6 +19,7 @@ services:
       DOCKER_NETWORK: "net1"
       SERVER_IMAGE: "server_image:latest"
       HEARTBEAT_INTERVAL: "5"
+      HASH_MODE: "modified"
 
 networks:
   net1:

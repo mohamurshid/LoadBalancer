@@ -12,36 +12,45 @@ import subprocess
 LB_URL = "http://localhost:5000"
 
 
+def print_response(resp):
+    """Print status and body, handling both JSON and non-JSON responses."""
+    try:
+        body = resp.json()
+    except ValueError:
+        body = resp.text.strip()
+    print(resp.status_code, body)
+
+
 def test_rep():
     print("\n--- Testing GET /rep ---")
     resp = requests.get(f"{LB_URL}/rep")
-    print(resp.status_code, resp.json())
+    print_response(resp)
 
 
 def test_add():
     print("\n--- Testing POST /add ---")
     payload = {"n": 2, "hostnames": ["S_test1", "S_test2"]}
     resp = requests.post(f"{LB_URL}/add", json=payload)
-    print(resp.status_code, resp.json())
+    print_response(resp)
 
 
 def test_rm():
     print("\n--- Testing DELETE /rm ---")
     payload = {"n": 1, "hostnames": ["S_test1"]}
     resp = requests.delete(f"{LB_URL}/rm", json=payload)
-    print(resp.status_code, resp.json())
+    print_response(resp)
 
 
 def test_home_route():
     print("\n--- Testing GET /home (routed through load balancer) ---")
     resp = requests.get(f"{LB_URL}/home")
-    print(resp.status_code, resp.json())
+    print_response(resp)
 
 
 def test_invalid_route():
     print("\n--- Testing GET /other (should fail, endpoint doesn't exist on servers) ---")
     resp = requests.get(f"{LB_URL}/other")
-    print(resp.status_code, resp.json())
+    print_response(resp)
 
 
 def test_failure_recovery():

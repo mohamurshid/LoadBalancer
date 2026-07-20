@@ -15,11 +15,289 @@ import string
 import threading
 
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string
 
 from consistent_hash import ConsistentHashMap
 
 app = Flask(__name__)
+
+DASHBOARD_HTML = """
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Load Balancer Dashboard</title>
+    <style>
+        :root {
+            --ink: #102a43;
+            --bg: #f5efe6;
+            --card: #fffdf9;
+            --accent: #007f5f;
+            --accent-2: #ff7d00;
+            --danger: #c1121f;
+            --muted: #5c677d;
+            --ring: rgba(0, 127, 95, 0.25);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 20% 0%, #ffe8b6 0%, transparent 50%),
+                radial-gradient(circle at 80% 100%, #b9fbc0 0%, transparent 45%),
+                var(--bg);
+        }
+
+        .page {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        h1 {
+            margin: 8px 0;
+            font-size: clamp(1.7rem, 4vw, 2.5rem);
+            letter-spacing: 0.03em;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 20px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+
+        .card {
+            background: var(--card);
+            border: 2px solid #ece6da;
+            border-radius: 14px;
+            padding: 14px;
+            box-shadow: 0 6px 18px rgba(16, 42, 67, 0.06);
+        }
+
+        .label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+            margin-bottom: 8px;
+        }
+
+        .big {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .replicas {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .chip {
+            background: #e3f2fd;
+            border: 1px solid #b3e5fc;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            margin-top: 16px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        input {
+            border: 2px solid #d7d3c8;
+            border-radius: 10px;
+            padding: 10px 12px;
+            min-width: 95px;
+            background: #fff;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px var(--ring);
+        }
+
+        button {
+            border: none;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-weight: 700;
+            cursor: pointer;
+            color: #fff;
+            transition: transform 0.12s ease;
+        }
+
+        button:hover { transform: translateY(-1px); }
+
+        .btn-main { background: var(--accent); }
+        .btn-alt { background: var(--accent-2); }
+        .btn-danger { background: var(--danger); }
+
+        pre {
+            margin: 8px 0 0;
+            background: #091524;
+            color: #c7f9cc;
+            border-radius: 10px;
+            padding: 12px;
+            max-height: 220px;
+            overflow: auto;
+            font-size: 0.86rem;
+        }
+
+        @media (max-width: 540px) {
+            .page { padding: 14px; }
+            .row { flex-direction: column; align-items: stretch; }
+            button, input { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <h1>Load Balancer Dashboard</h1>
+        <p class="subtitle">Live view and controls for your assignment demo.</p>
+
+        <section class="grid">
+            <article class="card">
+                <div class="label">Replica Count</div>
+                <div id="replicaCount" class="big">-</div>
+            </article>
+            <article class="card">
+                <div class="label">Last Routed Response</div>
+                <div id="lastRouted">Not requested yet</div>
+            </article>
+        </section>
+
+        <section class="card" style="margin-top: 14px;">
+            <div class="label">Replicas</div>
+            <div id="replicas" class="replicas"></div>
+
+            <div class="controls">
+                <div class="row">
+                    <button class="btn-main" id="refreshBtn" type="button">Refresh /rep</button>
+                    <button class="btn-alt" id="routeBtn" type="button">Send /home Request</button>
+                </div>
+
+                <div class="row">
+                    <input id="addN" type="number" min="1" value="1" />
+                    <input id="addHosts" type="text" placeholder="host1,host2 (optional)" />
+                    <button class="btn-main" id="addBtn" type="button">Add Replicas</button>
+                </div>
+
+                <div class="row">
+                    <input id="rmN" type="number" min="1" value="1" />
+                    <input id="rmHosts" type="text" placeholder="host1,host2 (optional)" />
+                    <button class="btn-danger" id="rmBtn" type="button">Remove Replicas</button>
+                </div>
+            </div>
+
+            <pre id="output">Ready.</pre>
+        </section>
+    </main>
+
+    <script>
+        const replicaCount = document.getElementById("replicaCount");
+        const replicasDiv = document.getElementById("replicas");
+        const output = document.getElementById("output");
+        const lastRouted = document.getElementById("lastRouted");
+
+        function parseHostnames(raw) {
+            return raw
+                .split(",")
+                .map((v) => v.trim())
+                .filter((v) => v.length > 0);
+        }
+
+        function setOutput(obj) {
+            output.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+        }
+
+        function renderReplicas(list) {
+            replicasDiv.innerHTML = "";
+            if (!list || list.length === 0) {
+                const empty = document.createElement("span");
+                empty.textContent = "No replicas running";
+                empty.style.color = "#7f8c8d";
+                replicasDiv.appendChild(empty);
+                return;
+            }
+            list.forEach((name) => {
+                const chip = document.createElement("span");
+                chip.className = "chip";
+                chip.textContent = name;
+                replicasDiv.appendChild(chip);
+            });
+        }
+
+        async function refreshReplicas() {
+            const res = await fetch("/rep");
+            const data = await res.json();
+            const msg = data.message || {};
+            replicaCount.textContent = msg.N ?? 0;
+            renderReplicas(msg.replicas || []);
+            setOutput(data);
+        }
+
+        async function postJson(url, method, payload) {
+            const res = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            setOutput(data);
+            await refreshReplicas();
+        }
+
+        document.getElementById("refreshBtn").addEventListener("click", refreshReplicas);
+
+        document.getElementById("routeBtn").addEventListener("click", async () => {
+            const res = await fetch("/home");
+            const data = await res.json();
+            lastRouted.textContent = data.message || JSON.stringify(data);
+            setOutput(data);
+        });
+
+        document.getElementById("addBtn").addEventListener("click", async () => {
+            const n = parseInt(document.getElementById("addN").value, 10);
+            const hosts = parseHostnames(document.getElementById("addHosts").value);
+            await postJson("/add", "POST", { n, hostnames: hosts });
+        });
+
+        document.getElementById("rmBtn").addEventListener("click", async () => {
+            const n = parseInt(document.getElementById("rmN").value, 10);
+            const hosts = parseHostnames(document.getElementById("rmHosts").value);
+            await postJson("/rm", "DELETE", { n, hostnames: hosts });
+        });
+
+        refreshReplicas();
+        setInterval(refreshReplicas, 5000);
+    </script>
+</body>
+</html>
+"""
 
 # ---------- Configuration (defaults match Task 2 spec) ----------
 N_SERVERS = int(os.environ.get("N_SERVERS", 3))
@@ -111,6 +389,10 @@ def heartbeat_monitor():
 
 
 # ---------- Endpoints ----------
+
+@app.route("/", methods=["GET"])
+def dashboard():
+    return render_template_string(DASHBOARD_HTML)
 
 @app.route("/rep", methods=["GET"])
 def get_replicas():
@@ -218,6 +500,16 @@ def route_request(subpath):
 
     try:
         resp = requests.get(f"http://{target_hostname}:5000/{subpath}", timeout=5)
+
+        # FIX: the backend being reachable doesn't mean it has this route.
+        # A 404 from the server means "<path> isn't registered" -> translate
+        # to the spec's error format instead of proxying Flask's raw 404 page.
+        if resp.status_code == 404:
+            return jsonify({
+                "message": f"<Error> '/{subpath}' endpoint does not exist in server replicas",
+                "status": "failure"
+            }), 400
+
         return (resp.content, resp.status_code, resp.headers.items())
     except requests.exceptions.RequestException:
         return jsonify({
@@ -230,4 +522,7 @@ if __name__ == "__main__":
     initialize_replicas(N_SERVERS)
     monitor_thread = threading.Thread(target=heartbeat_monitor, daemon=True)
     monitor_thread.start()
-    app.run(host="0.0.0.0", port=5000)
+    # FIX: threaded=True so the heartbeat monitor's /heartbeat polls and
+    # concurrent client requests (e.g. the 10,000-request load tests) don't
+    # queue behind each other on a single-threaded dev server.
+    app.run(host="0.0.0.0", port=5000, threaded=True)

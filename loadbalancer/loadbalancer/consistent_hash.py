@@ -12,6 +12,7 @@ Collisions are resolved using linear probing.
 """
 
 import math
+import os
 
 M_SLOTS = 512
 K_VIRTUAL = int(math.log2(M_SLOTS))  # = 9
@@ -21,6 +22,10 @@ class ConsistentHashMap:
     def __init__(self, num_slots=M_SLOTS, k_virtual=K_VIRTUAL):
         self.num_slots = num_slots
         self.k_virtual = k_virtual
+        # HASH_MODE controls which pair of hash functions is used:
+        #   spec     -> assignment quadratic formulas
+        #   modified -> multiplicative formulas used for A-4 comparison
+        self.hash_mode = os.environ.get("HASH_MODE", "spec").strip().lower()
         # slot_array[slot] = hostname string, or None if empty
         self.slot_array = [None] * self.num_slots
         # quick lookup: hostname -> list of slot indices it occupies
@@ -29,11 +34,15 @@ class ConsistentHashMap:
     # ---------- Hash functions ----------
 
     def request_hash(self, request_id: int) -> int:
-        """H(i) = i^2 + 2*i + 17, then mod M"""
+        """Return request hash for either spec or modified mode."""
+        if self.hash_mode == "modified":
+            return (request_id * 2654435761) % self.num_slots
         return (request_id ** 2 + 2 * request_id + 17) % self.num_slots
 
     def virtual_server_hash(self, server_id: int, replica_id: int) -> int:
-        """Phi(i, j) = i^2 + j^2 + 2*j + 25, then mod M"""
+        """Return virtual server hash for either spec or modified mode."""
+        if self.hash_mode == "modified":
+            return ((server_id * 2654435761) ^ (replica_id * 40503)) % self.num_slots
         return (server_id ** 2 + replica_id ** 2 + 2 * replica_id + 25) % self.num_slots
 
     # ---------- Probing helper ----------
