@@ -8,26 +8,35 @@ Run this AFTER the load balancer stack is up (N=3 by default).
 import asyncio
 import aiohttp
 from collections import Counter
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 LB_URL = "http://localhost:5000"
 NUM_REQUESTS = 10000
+CONCURRENCY = 200
 
 
-async def send_request(session):
+async def send_request(http_session, semaphore):
     try:
-        async with session.get(f"{LB_URL}/home") as resp:
-            data = await resp.json()
-            # message looks like "Hello from Server: <hostname>"
-            server_name = data["message"].split(":")[-1].strip()
-            return server_name
+        async with semaphore:
+            async with http_session.get(f"{LB_URL}/home") as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+                # message looks like "Hello from Server: <hostname>"
+                server_name = data["message"].split(":")[-1].strip()
+                return server_name
     except Exception:
         return None
 
 
 async def run_load_test(num_requests):
-    async with aiohttp.ClientSession() as session:
-        tasks = [send_request(session) for _ in range(num_requests)]
+    timeout = aiohttp.ClientTimeout(total=8)
+    connector = aiohttp.TCPConnector(limit=CONCURRENCY, limit_per_host=CONCURRENCY)
+    semaphore = asyncio.Semaphore(CONCURRENCY)
+    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http_session:
+        tasks = [send_request(http_session, semaphore) for _ in range(num_requests)]
         results = await asyncio.gather(*tasks)
     return results
 
@@ -50,7 +59,7 @@ def main():
     plt.xlabel("Server")
     plt.ylabel("Number of Requests Handled")
     plt.title(f"Request Distribution Across Servers (N=3, total={NUM_REQUESTS})")
-    plt.tight_layout()
+    plt.subplots_adjust(left=0.12, right=0.98, top=0.9, bottom=0.2)
     plt.savefig("a1_request_distribution.png")
     print("Saved chart to a1_request_distribution.png")
 

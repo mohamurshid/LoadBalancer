@@ -31,4 +31,4 @@ def heartbeat():
 
 if __name__ == "__main__":
     # Listen on all interfaces inside the container, port 5000
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, threaded=True)
