@@ -62,11 +62,11 @@
 
   ## How to Run
 
-  > **You're on Windows with Docker Desktop.** Docker Desktop already runs a
-  > Linux VM under the hood (via its WSL2 backend) — you do **not** need to
-  > separately install Ubuntu in WSL just to run this. Just make sure Docker
-  > Desktop is running, then use a terminal (PowerShell, cmd, or WSL — any of
-  > them work since they all just talk to the same Docker Desktop engine).
+  > [!NOTE]
+  > **Windows with Docker Desktop:** Docker Desktop already runs a Linux VM under
+  > the hood (via its WSL2 backend) — you do **not** need to separately install
+  > Ubuntu in WSL just to run this. Make sure Docker Desktop is running, then use
+  > any terminal (PowerShell, CMD, or WSL) to execute commands.
 
   ```bash
   # Build everything and start the stack (load balancer + N=3 servers)
@@ -82,17 +82,16 @@
   make down
   ```
 
-  If you don't have `make` available on Windows (it's not installed by
-  default), either:
-  - run the two commands inside the Makefile's `up` target manually:
-    ```
-    docker build -t server_image:latest ./server
-    docker-compose build
-    docker-compose up -d
-    ```
-  - or install `make` via Chocolatey (`choco install make`) or just use WSL's
-    bash for running `make` commands (Docker Desktop's WSL2 integration lets
-    WSL's docker CLI control the same engine).
+  > [!TIP]
+  > **Running without `make` on Windows:**  
+  > If `make` is not installed on your system, you can either:
+  > - Run the Makefile targets manually:
+  >   ```bash
+  >   docker build -t server_image:latest ./server
+  >   docker-compose build
+  >   docker-compose up -d
+  >   ```
+  > - Install `make` via Chocolatey (`choco install make`) or run `make` inside a WSL bash shell.
 
   ## Running the Analysis Scripts
 
