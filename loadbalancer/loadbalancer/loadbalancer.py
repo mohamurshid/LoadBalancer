@@ -177,7 +177,7 @@ DASHBOARD_HTML = """
 <body>
     <main class="page">
         <h1>Load Balancer Dashboard</h1>
-        <p class="subtitle">Live view and controls for your assignment demo.</p>
+       
 
         <section class="grid">
             <article class="card">
