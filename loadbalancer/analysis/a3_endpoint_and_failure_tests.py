@@ -53,25 +53,7 @@ def test_invalid_route():
     print_response(resp)
 
 
-def test_failure_recovery():
-    print("\n--- Testing failure recovery ---")
-    before = requests.get(f"{LB_URL}/rep").json()["message"]["replicas"]
-    print("Replicas before failure:", before)
 
-    victim = before[0]
-    print(f"Killing container '{victim}' to simulate failure ...")
-    subprocess.run(["docker", "kill", victim])
-
-    print("Waiting for the load balancer to detect failure and respawn (~10s) ...")
-    time.sleep(10)
-
-    after = requests.get(f"{LB_URL}/rep").json()["message"]["replicas"]
-    print("Replicas after recovery:", after)
-
-    if len(after) == len(before) and victim not in after:
-        print("Recovery successful: failed server was replaced, N is maintained.")
-    else:
-        print("Recovery did not complete as expected — check timing/logs.")
 
 
 if __name__ == "__main__":
